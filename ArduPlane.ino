@@ -687,6 +687,7 @@ AP_Mount camera_mount2(&current_loc, g_gps, &ahrs, 1);
 ////////////////////////////////////////////////////////////////////////////////
 //Setup radio on SPI with NSEL on pin 10
 rfm22 radio1(10);
+char superbuffer[60];
 
 ////////////////////////////////////////////////////////////////////////////////
 // Top-level logic
@@ -1320,15 +1321,34 @@ void rtty_txbit (int bit)
                 delayMicroseconds(19500); // 10000 = 100 BAUD 20150
  
 }
-/* 
-void loop(){
+ 
+void transmitradio(){
+  g_gps->update();
+    if (g_gps->new_data) {
+        if (g_gps->fix) {
+            Serial.print("Lat: ");
+            print_latlon(&Serial,g_gps->latitude);
+            Serial.print(" Lon: ");
+            print_latlon(&Serial,g_gps->longitude);
+            sprintf(superbuffer,", Alt: %.2fm GSP: %.2fm/s CoG: %d SAT: %d TIM: %lu STATUS: %u\n",
+                          (float)g_gps->altitude / 100.0,
+                          (float)g_gps->ground_speed / 100.0,
+                          (int)g_gps->ground_course / 100,
+                          g_gps->num_sats,
+                          g_gps->time,
+                          g_gps->status());
+        } else {
+            //Serial.println("No fix");
+        }
+        g_gps->new_data = false;
+    }
       radio1.write(0x07, 0x08); // turn tx on
-      delay(5000);
+      delay(500);
       rtty_txstring("$$$$");
       rtty_txstring(superbuffer);
       radio1.write(0x07, 0x01); // turn tx off
 }
-*/
+
 //******************************************
 //Program to verify the CRC check of the
 //form CRC-CCITT. the program breaks when it
@@ -1339,4 +1359,22 @@ uint16_t CRC16 (char *c)
   uint16_t crc = 0xFFFF;
   while (*c && *c != '*') crc = _crc_xmodem_update(crc, *c++);
   return crc;
+}
+
+void print_latlon(BetterStream *s, int32_t lat_or_lon)
+{
+    int32_t dec_portion, frac_portion;
+    int32_t abs_lat_or_lon = labs(lat_or_lon);
+
+    // extract decimal portion (special handling of negative numbers to ensure we round towards zero)
+    dec_portion = abs_lat_or_lon / T7;
+
+    // extract fractional portion
+    frac_portion = abs_lat_or_lon - dec_portion*T7;
+
+    // print output including the minus sign
+    if( lat_or_lon < 0 ) {
+        s->printf_P(PSTR("-"));
+    }
+    s->printf_P(PSTR("%ld.%07ld"),(long)dec_portion,(long)frac_portion);
 }
